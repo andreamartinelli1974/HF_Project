@@ -19,7 +19,7 @@ classdef HedgeFund < handle
     
     properties
         Name; %name of the fund
-        UnivoCode; %Univocal code of the fund (internal code)
+        %UnivoCode; %Univocal code of the fund (internal code)
         Strategy; %strategy of the fund (if known)
         TrackNAV; %track record: matrix with 1st column=dates, 2nd column=NAVs
         TrackROR; %same as TrackNAV with 2nd column=RORs
@@ -38,11 +38,12 @@ classdef HedgeFund < handle
         function obj = HedgeFund(params)  %constructor
             
             obj.Name = params.fundName;
-            obj.UnivoCode = params.univocode;
+            %obj.UnivoCode = params.univocode;
             obj.Strategy = params.fundStrategy;
             obj.TrackNAV = params.fundTrack;
             obj.TrackNAV(:,1)=x2mdate(obj.TrackNAV(:,1));
             obj.Currency = params.fundCcy;
+            obj.Periodicity = params.periodicity;
             obj.TrackROR(:,2) = (obj.TrackNAV(2:end,2)./obj.TrackNAV(1:end-1,2)-1);
             obj.TrackROR(:,1) = obj.TrackNAV(2:end,1);   
             
