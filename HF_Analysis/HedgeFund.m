@@ -25,6 +25,7 @@ classdef HedgeFund < handle
         TrackROR; %same as TrackNAV with 2nd column=RORs
         TrackEst; %same as TrackROR but with estimated ROR from the regression
         Currency; %currency of the fund (if known)
+        Periodicity; % daily, weekly, monthly....
         RegResult; %struct with the regression result 
         Betas; %betas of the regression
         TestReg; %include the main info about teh type and quality of the performed regression
@@ -43,7 +44,7 @@ classdef HedgeFund < handle
             obj.TrackNAV = params.fundTrack;
             obj.TrackNAV(:,1)=x2mdate(obj.TrackNAV(:,1));
             obj.Currency = params.fundCcy;
-            obj.Periodicity = params.periodicity;
+            obj.Periodicity = params.Periodicity;
             obj.TrackROR(:,2) = (obj.TrackNAV(2:end,2)./obj.TrackNAV(1:end-1,2)-1);
             obj.TrackROR(:,1) = obj.TrackNAV(2:end,1);   
             
