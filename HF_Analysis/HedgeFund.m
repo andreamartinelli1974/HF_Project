@@ -45,7 +45,7 @@ classdef HedgeFund < handle
             obj.TrackNAV(:,1)=x2mdate(obj.TrackNAV(:,1));
             obj.Currency = params.fundCcy;
             obj.Periodicity = params.Periodicity;
-            obj.TrackROR(:,2) = (obj.TrackNAV(2:end,2)./obj.TrackNAV(1:end-1,2)-1);
+            obj.TrackROR(:,2) = (obj.TrackNAV(2:end,2)./obj.TrackNAV(1:end-1,2)-1)*100;
             obj.TrackROR(:,1) = obj.TrackNAV(2:end,1);   
             
         end

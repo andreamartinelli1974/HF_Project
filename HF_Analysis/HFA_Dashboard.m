@@ -62,32 +62,6 @@ DataFromMDS.NOMDS = false(1); % if true (on machines with no MDS access), data a
 
 hor = DAA_params.Horizon; % Investment horizon (in days)
 
-%% READ THE INPUT FILES & GET HEDGE FUND TRACK RECORDS
-
-FundsPortfolio = readtable('FundsData.xls','Sheet','FUNDS');
-TableNames = FundsPortfolio.Properties.VariableNames;
-fundName = FundsPortfolio.(TableNames{1}); 
-fundName = strrep(fundName,' ','_');
-fundName = strrep(fundName,'-','_');
-Strategy = FundsPortfolio.(TableNames{2}); 
-Currency = FundsPortfolio.(TableNames{3});
-fundNavSheet = FundsPortfolio.(TableNames{4});
-Periodicity = FundsPortfolio.(TableNames{5});
-PTFweights = FundsPortfolio.(TableNames{6});
-
-tbnames = size(TableNames,2);
-
-for i = 1:tbnames
-
-    FundNav = readtable('FundsData.xls','Sheet',fundNavSheet{i});
-    params.fundName = fundName{i};
-    params.fundStrategy = Strategy{i};
-    params.fundCcy = Currency{i};
-    params.Periodicity = Periodicity{i};
-    params.fundTrack = table2array(FundNav);
-    
-    HFunds.(fundName{i}) = HedgeFund(params);
-end
 
 
 %% GET THE VARIOUS REGRESSORS DATA
@@ -99,7 +73,7 @@ end
 % following sections
 
 % WARNING: this is done to be able to have unique sheets 'CDS_Curves',
-% 'IR_Curves' and 'Single_Indices' within Investment_Universe.xls andb
+% 'IR_Curves' and 'Single_Indices' within Investment_Universe.xls and
 % recognize, within them, which curves/indices are needed.
 % The attributes 'internal'/'external' must be defined wrt the specific AA
 % run since a given curve could be needed only as 'internal' in a setup,
@@ -755,12 +729,73 @@ if isempty(Xmissing)
     Regressors.PCA.out.selected = Regressors.PCA.P(:,1:tr);
     Regressors.PCA.out.selectedNames = Regressors.PCA.summary_P.Properties.VariableNames(1:tr);
     Regressors.PCA.out.dates = pcaInput.dates;
+    Regressors.PCA.out.CellSelected = cell(size(Regressors.PCA.out.selectedNames));
+    
+    for i = 1:size(Regressors.PCA.out.selectedNames,2)
+        Regressors.PCA.out.CellSelected{i} = [Regressors.PCA.out.dates,Regressors.PCA.out.selected(:,i)];
+    end
 else
     disp('WARNING: THERE ARE MISSING DATA IN THE INPUT FATORS FOR THE PCA');
     return
 end
 
-%% PERFORM THE REGRESSION USING THE FLS METHOD
+%% GET HEDGE FUND DATA & PERFORM THE REGRESSION USING THE FLS METHOD
+
+FundsPortfolio = readtable('FundsData.xls','Sheet','FUNDS');
+TableNames = FundsPortfolio.Properties.VariableNames;
+fundName = FundsPortfolio.(TableNames{1}); 
+fundName = strrep(fundName,' ','_');
+fundName = strrep(fundName,'-','_');
+Strategy = FundsPortfolio.(TableNames{2}); 
+Currency = FundsPortfolio.(TableNames{3});
+fundNavSheet = FundsPortfolio.(TableNames{4});
+Periodicity = FundsPortfolio.(TableNames{5});
+PTFweights = FundsPortfolio.(TableNames{6});
+
+nrOfFunds = size(TableNames,2);
+
+for i = 1:nrOfFunds
+
+    FundNav = readtable('FundsData.xls','Sheet',fundNavSheet{i});
+    params.fundName = fundName{i};
+    params.fundStrategy = Strategy{i};
+    params.fundCcy = Currency{i};
+    params.Periodicity = Periodicity{i};
+    params.fundTrack = table2array(FundNav);
+    
+    HFunds.(fundName{i}) = HedgeFund(params);
+    
+    RawReturns = Regressors.PCA.out.CellSelected;
+    
+    utilParams = [];
+    utilParams.inputTS = RawReturns';
+    utilParams.referenceDatesVector = HFunds.(fundName{i}).TrackROR(:,1); 
+    utilParams.op_type = 'fillUsingNearest';
+    U = Utilities(utilParams);
+    U.GetCommonDataSet;
+    
+    Y = HFunds.(fundName{i}).TrackROR(:,2) ;
+    X = U.Output.DataSet.data;
+    Dates = U.Output.DataSet.dates;
+    rgrs = [Dates,X];
+    
+    prm.inputdates = Dates; % inputdates;
+    prm.inputarray = [Y,X];  % inparrayror;
+    prm.inputnames = [fundName{i},Regressors.PCA.out.selectedNames];
+    prm.rollingperiod = 30;
+    
+    RegressFLS30 = FLSregression(prm)
+    RegressFLS30.GetFLS(30);
+    betas = RegressFLS30.Betas;
+    RegressFLS30.GetFLSforecast(betas,rgrs);
+    
+    HFunds.(fundName{i}).TrackEst =  RegressFLS30.Output;
+    HFunds.(fundName{i}).RegResult =  RegressFLS30.FLSdata;
+    HFunds.(fundName{i}).BackTest = [Y,RegressFLS30.Output(:,2)];
+    
+end
+
+
 
 
 
