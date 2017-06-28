@@ -32,7 +32,7 @@ end
 try
     javaaddpath('C:\blp\DAPI\blpapi3.jar')
     DataFromBBG.BBG_conn = blp;
-    DataFromBBG.NOBBG = false(1); % True when Bloomberg is NOT available and to use previopusly saved data
+    DataFromBBG.NOBBG = false(1); % True when Bloomberg is NOT available and to use previously saved data
 catch ME
     DataFromBBG.BBG_conn = [];
     DataFromBBG.NOBBG = false(1); % if true (on machines with no BBG terminal), data are recovered from previously saved files (.save2disk option above)
