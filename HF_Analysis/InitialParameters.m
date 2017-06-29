@@ -43,7 +43,7 @@ case 'HFunds'
         history_start_date = '01/01/2000';
         history_end_date =  datestr(today-1,'mm/dd/yyyy'); %['06/07/2017']; % **** DA AGGIORNARE AD OGNI RE-RUN ****
         % Yield curves historical dataset start date
-        history_start_date_YC = '06/30/2015';
+        history_start_date_YC = '06/30/2006';
         % dates for the hist windows used with drivers of quant signals
         start_dt_num = datenum(['01/01/1995']);
         end_dt = datestr(today-1,'mm/dd/yyyy'); % datenum(['06/07/2017']);   % **** DA AGGIORNARE AD OGNI RE-RUN ****
@@ -83,7 +83,7 @@ case 'HFunds'
         DAA_params.ProjectionResampling_numsim = 49000; 
         
         DAA_params.InvariantBackwardsProxy = false(1); % to extend backwards in time the invariants history when the data are too short
-        DAA_params.StartDayInvariantsBackwards = ['01/01/2011']; % if InvariantBackwardsProxy = true. this is the date to check if an invariant is too short
+        DAA_params.StartDayInvariantsBackwards = ['01/01/2007']; % if InvariantBackwardsProxy = true. this is the date to check if an invariant is too short
         
         DAA_params.FullHist4TailsEstimation = false(1); % to use always the full available history (at each time) to model the tails
         % length of the hist distrib to be used at each point in time (0 to use the full past dataset).

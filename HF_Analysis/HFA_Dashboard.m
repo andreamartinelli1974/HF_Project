@@ -786,9 +786,11 @@ for i = 1:nrOfFunds
     prm.inputnames = [fundName{i},Regressors.PCA.out.selectedNames];
     prm.rollingperiod = 30;
     
-    RegressFLS30 = FLSregression(prm)
-    RegressFLS30.GetFLS(30);
+    RegressFLS30 = FLSregression(prm) % constructor
+    RegressFLS30.GetFLS(30);          % regression
     betas = RegressFLS30.Betas;
+    RegressFLS30.GetHFfake(betas);    % built a fake HFund obj
+    
     RegressFLS30.GetFLSforecast(betas,rgrs);
     
     HFunds.(fundName{i}).TrackEst =  RegressFLS30.Output;
