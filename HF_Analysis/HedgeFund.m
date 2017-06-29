@@ -94,7 +94,7 @@ classdef HedgeFund < handle
             % calculates the cumulative returns of the original fund track and of
             % the estimated track
             backtest=obj.TrackEst;
-            backtest(:,2:end)=1+backtest(:,2:end);
+            backtest(:,2:end)=1+backtest(:,2:end)/100;
             backtest(:,2:end)=cumprod(backtest(:,2:end),1);
             obj.BackTest=backtest;
             

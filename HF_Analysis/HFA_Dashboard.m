@@ -786,17 +786,23 @@ for i = 1:nrOfFunds
     prm.inputnames = [fundName{i},Regressors.PCA.out.selectedNames];
     prm.rollingperiod = 30;
     
-    RegressFLS30 = FLSregression(prm) % constructor
-    RegressFLS30.GetFLS(30);          % regression
-    betas = RegressFLS30.Betas;
-    RegressFLS30.GetHFfake(betas);    % built a fake HFund obj
+%     RegressFLS30 = FLSregression(prm) % constructor
+%     RegressFLS30.GetFLS(30);          % regression
+%     betas = RegressFLS30.Betas;
+%     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
     
-    RegressFLS30.GetFLSforecast(betas,rgrs);
+    RegressFLSR = FLSregression(prm) % constructor
+    RegressFLSR.GetFLSrolling(30);          % regression
+    betasR = RegressFLSR.Betas;
     
-    HFunds.(fundName{i}).TrackEst =  RegressFLS30.Output;
-    HFunds.(fundName{i}).RegResult =  RegressFLS30.FLSdata;
-    HFunds.(fundName{i}).BackTest = [Y,RegressFLS30.Output(:,2)];
-    
+    RegressFLSR.GetHFfake(betasR);    % built a fake HFund obj
+    FakeHF.(fundName{i}) = RegressFLSR.Output;
+    RegressFLSR.GetFLSforecast(betasR,rgrs,'Rolling');
+    HFunds.(fundName{i}).TrackEst =  RegressFLSR.Output;
+    HFunds.(fundName{i}).RegResult =  RegressFLSR.FLSdata;
+    HFunds.(fundName{i}).BackTest = [Y(prm.rollingperiod:end,:),RegressFLSR.Output(:,2)];
+    insample=false(1);
+    HFunds.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
 end
 
 
