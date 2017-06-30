@@ -635,7 +635,7 @@ IU = ReadFromIU_inputFile(iu_params);
 % INSTANCIATING AN OBJ OF CLASS UNIVERSE AND ADDING ASSETS TO IT
 %  ************************************************************************
 clear Universe_1;
-Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF);
+Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF,IU);
 % adding vectors of assets to the universe
 if isvector(IU.E)
     Universe_1.AddAsset(IU.E);
@@ -756,6 +756,7 @@ PTFweights = FundsPortfolio.(TableNames{6});
 
 nrOfFunds = size(TableNames,2);
 
+tic
 for i = 1:nrOfFunds
 
     FundNav = readtable('FundsData.xls','Sheet',fundNavSheet{i});
@@ -784,7 +785,18 @@ for i = 1:nrOfFunds
     prm.inputdates = Dates; % inputdates;
     prm.inputarray = [Y,X];  % inparrayror;
     prm.inputnames = [fundName{i},Regressors.PCA.out.selectedNames];
-    prm.rollingperiod = 30;
+    
+    switch HFunds.(fundName{i}).Periodicity
+        case 'monthly'
+            prm.rollingperiod = 30;
+        case 'weekly'
+            prm.rollingperiod = 30*4;
+        case 'daily' 
+            prm.rollingperiod = 30*21;
+        otherwise
+            disp('Periodicity not found or wrong (only monthly, weekly ad daily available')
+            prm.rollingperiod = min(round(size(HFunds.(fundName{i}).TrackROR,1)/2,0),30*21);
+    end
     
 %     RegressFLS30 = FLSregression(prm) % constructor
 %     RegressFLS30.GetFLS(30);          % regression
@@ -805,6 +817,9 @@ for i = 1:nrOfFunds
     HFunds.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
 end
 
+toc
+
+save testHF_FLS.mat
 
 
 
