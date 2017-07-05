@@ -20,7 +20,7 @@ switch desiredSetup
 case 'HFunds'
         
         InvestmentUniverse_fileName = ['Regressors.xls'];
-        InvestmentUniverse_sheetName = ['Regressors'];
+        InvestmentUniverse_sheetName = ['Regressors-EXTENDED'];
         
         % when the BackTestOnly flag is true no optimization takes place and the
         % allocation is assumed to be the one setup by the upper bound limit
@@ -40,7 +40,7 @@ case 'HFunds'
         
         % *********  UPDATE HIST DATES SETTINGS  BEFORE RUNNING  **********
         % dates for the historical dataset for assets in Universe
-        history_start_date = '01/01/2000';
+        history_start_date = '01/01/2005';
         history_end_date =  datestr(today-1,'mm/dd/yyyy'); %['06/07/2017']; % **** DA AGGIORNARE AD OGNI RE-RUN ****
         % Yield curves historical dataset start date
         history_start_date_YC = '06/30/2006';

@@ -767,6 +767,7 @@ for i = 1:nrOfFunds
     params.fundTrack = table2array(FundNav);
     
     HFunds.(fundName{i}) = HedgeFund(params);
+    HFundsInSample.(fundName{i}) = HedgeFund(params);
     
     RawReturns = Regressors.PCA.out.CellSelected;
     
@@ -811,21 +812,21 @@ for i = 1:nrOfFunds
     FakeHF.(fundName{i}) = RegressFLSR.Output;
     RegressFLSR.GetFLSforecast(betasR,rgrs,'Rolling');
     HFunds.(fundName{i}).TrackEst =  RegressFLSR.Output;
-    HFunds.(fundName{i}).RegResult =  RegressFLSR.FLSdata;
+    HFunds.(fundName{i}).RegResult =  RegressFLSR.RollingFLSdata;
     HFunds.(fundName{i}).BackTest = [Y(prm.rollingperiod:end,:),RegressFLSR.Output(:,2)];
-    HFundsInSample.(fundName{i}) = HFunds.(fundName{i});
+    
     insample=false(1);
     HFunds.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
-%     insample=true(1);
-%     HFundsInSample.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
+    insample=true(1);
+    HFundsInSample.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
     
+    elapstime(i)=toc;
 end
+elapstime(i+1) = toc;
 
-toc
+save testHF_FLS_EXTENDED.mat
 
-save testHF_FLS.mat
-
-%exit
+exit
 
 
 
