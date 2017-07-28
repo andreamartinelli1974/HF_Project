@@ -601,7 +601,9 @@ else
 end
 
 if exist('rf','var') && ~isempty(rf)
-    Ext_RF = External_Risk_Factors(rf,obj_names);
+    erfParams.returnsLag = 1;
+    erfParams.ExtendedLag = 5;
+    Ext_RF = External_Risk_Factors(rf,obj_names,erfParams);
 end
 
 %% ASSETS OF THE INVESTMENT UNIVERSE DEFINITION
@@ -627,7 +629,7 @@ iu_params.additional_params = additional_params;
 iu_params.params_cds_ret = params_cds_ret;
 iu_params.scenarioAnalysisRun = DAA_params.scenarioAnalysisRun;
 iu_params.MinDate4scenarioAnalysisRun = DAA_params.MinDate4scenarioAnalysisRun;
-
+iu_params.MinHistDate4Assets = []; 
 
 IU = ReadFromIU_inputFile(iu_params);
 
@@ -635,7 +637,7 @@ IU = ReadFromIU_inputFile(iu_params);
 % INSTANCIATING AN OBJ OF CLASS UNIVERSE AND ADDING ASSETS TO IT
 %  ************************************************************************
 clear Universe_1;
-Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF,IU);
+Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF,IU,[]);
 % adding vectors of assets to the universe
 if isvector(IU.E)
     Universe_1.AddAsset(IU.E);
@@ -745,49 +747,49 @@ end
 
 FundsPortfolio = readtable('FundsData.xls','Sheet','FUNDS');
 TableNames = FundsPortfolio.Properties.VariableNames;
-fundName = FundsPortfolio.(TableNames{1}); 
-fundName = strrep(fundName,' ','_');
-fundName = strrep(fundName,'-','_');
+fundNames = FundsPortfolio.(TableNames{1}); 
+fundNames = strrep(fundNames,' ','_');
+fundNames = strrep(fundNames,'-','_');
 Strategy = FundsPortfolio.(TableNames{2}); 
 Currency = FundsPortfolio.(TableNames{3});
 fundNavSheet = FundsPortfolio.(TableNames{4});
 Periodicity = FundsPortfolio.(TableNames{5});
 PTFweights = FundsPortfolio.(TableNames{6});
 
-nrOfFunds = size(TableNames,2);
+nrOfFunds = size(fundNames,1);
 
 tic
 for i = 1:nrOfFunds
 
     FundNav = readtable('FundsData.xls','Sheet',fundNavSheet{i});
-    params.fundName = fundName{i};
+    params.fundName = fundNames{i};
     params.fundStrategy = Strategy{i};
     params.fundCcy = Currency{i};
     params.Periodicity = Periodicity{i};
     params.fundTrack = table2array(FundNav);
     
-    HFunds.(fundName{i}) = HedgeFund(params);
-    HFundsInSample.(fundName{i}) = HedgeFund(params);
+    HFunds.(fundNames{i}) = HedgeFund(params);
+    HFundsInSample.(fundNames{i}) = HedgeFund(params);
     
     RawReturns = Regressors.PCA.out.CellSelected;
     
     utilParams = [];
     utilParams.inputTS = RawReturns';
-    utilParams.referenceDatesVector = HFunds.(fundName{i}).TrackROR(:,1); 
+    utilParams.referenceDatesVector = HFunds.(fundNames{i}).TrackROR(:,1); 
     utilParams.op_type = 'fillUsingNearest';
     U = Utilities(utilParams);
     U.GetCommonDataSet;
     
-    Y = HFunds.(fundName{i}).TrackROR(:,2) ;
+    Y = HFunds.(fundNames{i}).TrackROR(:,2) ;
     X = U.Output.DataSet.data;
     Dates = U.Output.DataSet.dates;
     rgrs = [Dates,X];
     
     prm.inputdates = Dates; % inputdates;
     prm.inputarray = [Y,X];  % inparrayror;
-    prm.inputnames = [fundName{i},Regressors.PCA.out.selectedNames];
+    prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
     
-    switch HFunds.(fundName{i}).Periodicity
+    switch HFunds.(fundNames{i}).Periodicity
         case 'monthly'
             prm.rollingperiod = 30;
         case 'weekly'
@@ -796,30 +798,41 @@ for i = 1:nrOfFunds
             prm.rollingperiod = 30*21;
         otherwise
             disp('Periodicity not found or wrong (only monthly, weekly ad daily available')
-            prm.rollingperiod = min(round(size(HFunds.(fundName{i}).TrackROR,1)/2,0),30*21);
+            prm.rollingperiod = min(round(size(HFunds.(fundNames{i}).TrackROR,1)/2,0),30*21);
     end
     
-%     RegressFLS30 = FLSregression(prm) % constructor
-%     RegressFLS30.GetFLS(30);          % regression
-%     betas = RegressFLS30.Betas;
-%     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
+    RegressFLS30 = FLSregression(prm) % constructor
+    RegressFLS30.GetFLS(90);          % regression
+    betas = RegressFLS30.Betas;
+    RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
     
-    RegressFLSR = FLSregression(prm) % constructor
-    RegressFLSR.GetFLSrolling(30);          % regression
-    betasR = RegressFLSR.Betas;
+    OriginalPrices = HFunds.(fundNames{i}).TrackNAV(:,2);
+    DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
+    Betas = RegressFLS30.Betas(:,2:end);
+    DateBetas = RegressFLS30.Betas(:,1);
+    regressors = Regressors.PCA.out.selected;
+    DateRegressors = Regressors.PCA.out.dates;
     
-    RegressFLSR.GetHFfake(betasR);    % built a fake HFund obj
-    FakeHF.(fundName{i}) = RegressFLSR.Output;
-    RegressFLSR.GetFLSforecast(betasR,rgrs,'Rolling');
-    HFunds.(fundName{i}).TrackEst =  RegressFLSR.Output;
-    HFunds.(fundName{i}).RegResult =  RegressFLSR.RollingFLSdata;
-    HFunds.(fundName{i}).BackTest = [Y(prm.rollingperiod:end,:),RegressFLSR.Output(:,2)];
+    HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
+    HFunds.(fundNames{i}).Betas = RegressFLS30.Betas;
+    HFunds.(fundNames{i}).RegResult = RegressFLS30;
     
-    insample=false(1);
-    HFunds.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
-    insample=true(1);
-    HFundsInSample.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
-    
+%     RegressFLSR = FLSregression(prm) % constructor
+%     RegressFLSR.GetFLSrolling(30);          % regression
+%     betasR = RegressFLSR.Betas;
+%     
+%     RegressFLSR.GetHFfake(betasR);    % built a fake HFund obj
+%     FakeHF.(fundName{i}) = RegressFLSR.Output;
+%     RegressFLSR.GetFLSforecast(betasR,rgrs,'Rolling');
+%     HFunds.(fundName{i}).TrackEst =  RegressFLSR.Output;
+%     HFunds.(fundName{i}).RegResult =  RegressFLSR.RollingFLSdata;
+%     HFunds.(fundName{i}).BackTest = [Y(prm.rollingperiod:end,:),RegressFLSR.Output(:,2)];
+%     
+%     insample=false(1);
+%     HFunds.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
+%     insample=true(1);
+%     HFundsInSample.(fundName{i}).CreateTrackEst(FakeHF.(fundName{i}),insample);
+%     
     elapstime(i)=toc;
 end
 elapstime(i+1) = toc;
