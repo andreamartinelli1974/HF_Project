@@ -769,7 +769,7 @@ for i = 1:nrOfFunds
     params.fundTrack = table2array(FundNav);
     
     HFunds.(fundNames{i}) = HedgeFund(params);
-    HFundsInSample.(fundNames{i}) = HedgeFund(params);
+    HFundsSR.(fundNames{i}) = HedgeFund(params);
     
     RawReturns = Regressors.PCA.out.CellSelected;
     
@@ -806,6 +806,9 @@ for i = 1:nrOfFunds
     betas = RegressFLS30.Betas;
     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
     
+    SimpleRegress = Regression(prm);
+    SimpleRegress.SimpleRegression;
+    
     OriginalPrices = HFunds.(fundNames{i}).TrackNAV(:,2);
     DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
     Betas = RegressFLS30.Betas(:,2:end);
@@ -816,6 +819,12 @@ for i = 1:nrOfFunds
     HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
     HFunds.(fundNames{i}).Betas = RegressFLS30.Betas;
     HFunds.(fundNames{i}).RegResult = RegressFLS30;
+    
+    BetasSR = repmat(table2array(SimpleRegress.Betas(:,3:end)),size(Betas,1),1);
+    
+    HFundsSR.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,BetasSR,DateBetas,regressors,DateRegressors);
+    HFundsSR.(fundNames{i}).Betas = BetasSR;
+    HFundsSR.(fundNames{i}).RegResult = SimpleRegress;
     
 %     RegressFLSR = FLSregression(prm) % constructor
 %     RegressFLSR.GetFLSrolling(30);          % regression
@@ -839,7 +848,7 @@ elapstime(i+1) = toc;
 
 save testHF_FLS_EXTENDED.mat
 
-exit
+% exit
 
 
 
