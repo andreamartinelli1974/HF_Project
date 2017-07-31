@@ -824,7 +824,7 @@ for i = 1:nrOfFunds
     DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
     Betas = RegressFLS30.Betas(:,2:end);
     DateBetas = RegressFLS30.Betas(:,1);
-    regressors = Regressors.PCA.out.selected./100;
+    regressors = Regressors.PCA.out.selected./100; %%% very important: regressors are expressed in %!!!
     DateRegressors = Regressors.PCA.out.dates;
     
     HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
