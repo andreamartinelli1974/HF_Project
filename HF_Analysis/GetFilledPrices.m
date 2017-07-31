@@ -54,7 +54,7 @@ function FilledPrices = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBeta
      
     EstReturn =  NaN(size(DateRegressors));
     for i = 2:nofdates
-            EstimatedReturn = (extendedBetas(i,:)*Regressors(i,:)')/100;
+            EstimatedReturn = (extendedBetas(i,:)*Regressors(i,:)');
             EstReturn(i) = EstimatedReturn;
         if isnan(extendedPrice(i))
             extendedPrice(i)=extendedPrice(i-1)*(1+EstimatedReturn);

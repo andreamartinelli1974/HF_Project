@@ -1,5 +1,5 @@
-clc;
 clear all;
+clc;
 close all;
 rng('default');
 
@@ -685,10 +685,15 @@ Input.inputnames = ['FakeY',Regressors.NamesSet'];
 Input.rollingperiod = 0; %not used for simple regressions
 
 Reg = Regression(Input);
-MTX = Reg.getMtxPredictors(Reg,1,'correlation',0.8);
+MTX = Reg.getMtxPredictors(Reg,1,'correlation',0.6);
 MTX = logical(MTX(end,:));
 X = X(:,MTX);
 FactorNames = Regressors.NamesSet(MTX)';
+
+for i = 1:size(FactorNames,2)
+        Regressors.CellSelected{i} = [Regressors.Dates,X(:,i)];
+end
+
 clear Reg;
 
 matrix = [Regressors.Dates,X];
@@ -743,6 +748,8 @@ else
     return
 end
 
+
+
 %% GET HEDGE FUND DATA & PERFORM THE REGRESSION USING THE FLS METHOD
 
 FundsPortfolio = readtable('FundsData.xls','Sheet','FUNDS');
@@ -771,7 +778,11 @@ for i = 1:nrOfFunds
     HFunds.(fundNames{i}) = HedgeFund(params);
     HFundsSR.(fundNames{i}) = HedgeFund(params);
     
+    atscreen = ['now processing  ',fundNames{i}];
+    disp(atscreen)
+    
     RawReturns = Regressors.PCA.out.CellSelected;
+    % RawReturns = Regressors.CellSelected; %% without PCA
     
     utilParams = [];
     utilParams.inputTS = RawReturns';
@@ -786,7 +797,7 @@ for i = 1:nrOfFunds
     rgrs = [Dates,X];
     
     prm.inputdates = Dates; % inputdates;
-    prm.inputarray = [Y,X];  % inparrayror;
+    prm.inputarray = [Y,X]./100;  % inparrayror;
     prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
     
     switch HFunds.(fundNames{i}).Periodicity
@@ -801,7 +812,7 @@ for i = 1:nrOfFunds
             prm.rollingperiod = min(round(size(HFunds.(fundNames{i}).TrackROR,1)/2,0),30*21);
     end
     
-    RegressFLS30 = FLSregression(prm) % constructor
+    RegressFLS30 = FLSregression(prm); % constructor
     RegressFLS30.GetFLS(90);          % regression
     betas = RegressFLS30.Betas;
     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
@@ -813,7 +824,7 @@ for i = 1:nrOfFunds
     DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
     Betas = RegressFLS30.Betas(:,2:end);
     DateBetas = RegressFLS30.Betas(:,1);
-    regressors = Regressors.PCA.out.selected;
+    regressors = Regressors.PCA.out.selected./100;
     DateRegressors = Regressors.PCA.out.dates;
     
     HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
