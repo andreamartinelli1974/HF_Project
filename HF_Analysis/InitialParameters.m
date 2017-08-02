@@ -20,7 +20,7 @@ switch desiredSetup
 case 'HFunds'
         
         InvestmentUniverse_fileName = ['Regressors.xls'];
-        InvestmentUniverse_sheetName = ['Regressors-EXTENDED2'];
+        InvestmentUniverse_sheetName = ['RegressorsTEST'];
         
         % when the BackTestOnly flag is true no optimization takes place and the
         % allocation is assumed to be the one setup by the upper bound limit

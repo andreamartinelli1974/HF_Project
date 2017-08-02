@@ -637,7 +637,7 @@ IU = ReadFromIU_inputFile(iu_params);
 % INSTANCIATING AN OBJ OF CLASS UNIVERSE AND ADDING ASSETS TO IT
 %  ************************************************************************
 clear Universe_1;
-Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF,IU,[]);
+Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF);
 % adding vectors of assets to the universe
 if isvector(IU.E)
     Universe_1.AddAsset(IU.E);
@@ -675,6 +675,11 @@ Universe_1.GetInvariants_EmpiricalDistribution;
 
 %% CREATES THE REGRESSORS GROUP AND PERFORM A PCA ON THE REGRESSORS
 Regressors = Universe_1.AllInvariants;
+nameset = Universe_1.AllInvariants.NamesSet;
+
+for i = 1:size(nameset,1)
+        Regressors.CellSelected{i} = [Universe_1.AllInvariants.Dates,Universe_1.AllInvariants.X(:,i)];
+end
 
 % gets the PCA of the invariants used as factors
 X = zscore(Regressors.X);
@@ -689,10 +694,6 @@ MTX = Reg.getMtxPredictors(Reg,1,'correlation',0.6);
 MTX = logical(MTX(end,:));
 X = X(:,MTX);
 FactorNames = Regressors.NamesSet(MTX)';
-
-for i = 1:size(FactorNames,2)
-        Regressors.CellSelected{i} = [Regressors.Dates,X(:,i)];
-end
 
 clear Reg;
 
@@ -781,8 +782,8 @@ for i = 1:nrOfFunds
     atscreen = ['now processing  ',fundNames{i}];
     disp(atscreen)
     
-    RawReturns = Regressors.PCA.out.CellSelected;
-    % RawReturns = Regressors.CellSelected; %% without PCA
+    % RawReturns = Regressors.PCA.out.CellSelected;
+    RawReturns = Regressors.CellSelected; %% without PCA
     
     utilParams = [];
     utilParams.inputTS = RawReturns';
@@ -798,7 +799,8 @@ for i = 1:nrOfFunds
     
     prm.inputdates = Dates; % inputdates;
     prm.inputarray = [Y,X]./100;  % inparrayror;
-    prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
+    %prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
+    prm.inputnames = [fundNames{i},Universe_1.AllInvariants.NamesSet'];  %without pca
     
     switch HFunds.(fundNames{i}).Periodicity
         case 'monthly'
@@ -813,9 +815,10 @@ for i = 1:nrOfFunds
     end
     
     RegressFLS30 = FLSregression(prm); % constructor
-    RegressFLS30.GetFLS(90);          % regression
+    RegressFLS30.GetFLS(90,0);          % regression
     betas = RegressFLS30.Betas;
     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
+    
     
     SimpleRegress = Regression(prm);
     SimpleRegress.SimpleRegression;
@@ -824,12 +827,15 @@ for i = 1:nrOfFunds
     DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
     Betas = RegressFLS30.Betas(:,2:end);
     DateBetas = RegressFLS30.Betas(:,1);
-    regressors = Regressors.PCA.out.selected./100; %%% very important: regressors are expressed in %!!!
-    DateRegressors = Regressors.PCA.out.dates;
+    % regressors = Regressors.PCA.out.selected./100; %%% very important: regressors are expressed in %!!!
+    % DateRegressors = Regressors.PCA.out.dates;
+    regressors = Universe_1.AllInvariants.X./100; % without pca
+    DateRegressors = Universe_1.AllInvariants.Dates; % without pca
     
     HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
     HFunds.(fundNames{i}).Betas = RegressFLS30.Betas;
     HFunds.(fundNames{i}).RegResult = RegressFLS30;
+    HFunds.(fundNames{i}).TrackEst =  RegressFLS30.Output;
     
     BetasSR = repmat(table2array(SimpleRegress.Betas(:,3:end)),size(Betas,1),1);
     
