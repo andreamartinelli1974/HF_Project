@@ -673,81 +673,11 @@ Universe_1.GetLastDate;
 % invoking method to get all invariants
 Universe_1.GetInvariants_EmpiricalDistribution;
 
-%% CREATES THE REGRESSORS GROUP AND PERFORM A PCA ON THE REGRESSORS
+%% CREATES THE REGRESSORS SET
 Regressors = Universe_1.AllInvariants;
 nameset = Universe_1.AllInvariants.NamesSet;
 
-for i = 1:size(nameset,1)
-        Regressors.CellSelected{i} = [Universe_1.AllInvariants.Dates,Universe_1.AllInvariants.X(:,i)];
-end
 
-% gets the PCA of the invariants used as factors
-X = zscore(Regressors.X);
-
-Input.inputdates = Regressors.Dates;
-Input.inputarray = [X(:,1),X];
-Input.inputnames = ['FakeY',Regressors.NamesSet'];
-Input.rollingperiod = 0; %not used for simple regressions
-
-Reg = Regression(Input);
-MTX = Reg.getMtxPredictors(Reg,1,'correlation',0.6);
-MTX = logical(MTX(end,:));
-X = X(:,MTX);
-FactorNames = Regressors.NamesSet(MTX)';
-
-clear Reg;
-
-matrix = [Regressors.Dates,X];
-headers = ['Datenumx',FactorNames];
-
-% Inputs for the PCA Constructor
-pcaParam.sourceData  = {matrix; headers};
-pcaParam.startDate   = Regressors.Dates(1,1);
-pcaParam.endDate     = Regressors.Dates(end,1);
-pcaParam.inputFormat = 2; % 1: xls reading,   2: matrix reading
-pcaParam.returnsType = 1; % 0: simple return, 1: log return
-pcaParam.weights     = [];
-pcaParam.algo      = 'eig';
-pcaParam.explVar   = 0.90;
-pcaParam.lambThres = 0;
-pcaParam.nObs      = [];
-pcaParam.nEstim    = [];
-pcaParam.estimType = 2;   % 0: rolling, 1: incremental
-% Backtest, 2: empty initialization
-
-disp('performing the PCA')
-% constructor
-PCAanalysis = PcaAnalysis(pcaParam);
-
-Xmissing = ismissing(pcaParam.sourceData{1,1}(:,2:end));
-Xmissing = find(Xmissing>0);
-
-if isempty(Xmissing)
-    % get the pca
-    pcaInput.data  = pcaParam.sourceData{1,1}(:,2:end);
-    pcaInput.dates = pcaParam.sourceData{1,1}(:,1);
-    pcaInput.assets  = pcaParam.sourceData{2,1}(:,2:end);
-    pcaInput.algo = 'eig'; % needed for the matlab native pca function
-    Regressors.PCA = PCAanalysis.getPca(pcaInput);
-    
-    summaryL = table2array(Regressors.PCA.summary_L); % PCs identification
-    tr = find(summaryL(:,3) <= pcaParam.explVar,1,'last')+1;
-    if isempty(tr)
-        tr = 1;
-        disp('WARNING: JUST ONE PCA FACTOR FOUND')
-    end
-    Regressors.PCA.out.selected = Regressors.PCA.P(:,1:tr);
-    Regressors.PCA.out.selectedNames = Regressors.PCA.summary_P.Properties.VariableNames(1:tr);
-    Regressors.PCA.out.dates = pcaInput.dates;
-    Regressors.PCA.out.CellSelected = cell(size(Regressors.PCA.out.selectedNames));
-    
-    for i = 1:size(Regressors.PCA.out.selectedNames,2)
-        Regressors.PCA.out.CellSelected{i} = [Regressors.PCA.out.dates,Regressors.PCA.out.selected(:,i)];
-    end
-else
-    disp('WARNING: THERE ARE MISSING DATA IN THE INPUT FATORS FOR THE PCA');
-    return
-end
 
 
 
@@ -782,67 +712,76 @@ for i = 1:nrOfFunds
     atscreen = ['now processing  ',fundNames{i}];
     disp(atscreen)
     
-    % RawReturns = Regressors.PCA.out.CellSelected;
-    RawReturns = Regressors.CellSelected; %% without PCA
-    
-    utilParams = [];
-    utilParams.inputTS = RawReturns';
-    utilParams.referenceDatesVector = HFunds.(fundNames{i}).TrackROR(:,1); 
-    utilParams.op_type = 'fillUsingNearest';
-    U = Utilities(utilParams);
-    U.GetCommonDataSet;
-    
-    Y = HFunds.(fundNames{i}).TrackROR(:,2) ;
-    X = U.Output.DataSet.data;
-    Dates = U.Output.DataSet.dates;
-    rgrs = [Dates,X];
-    
-    prm.inputdates = Dates; % inputdates;
-    prm.inputarray = [Y,X]./100;  % inparrayror;
-    %prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
-    prm.inputnames = [fundNames{i},Universe_1.AllInvariants.NamesSet'];  %without pca
-    
-    switch HFunds.(fundNames{i}).Periodicity
-        case 'monthly'
-            prm.rollingperiod = 30;
-        case 'weekly'
-            prm.rollingperiod = 30*4;
-        case 'daily' 
-            prm.rollingperiod = 30*21;
-        otherwise
-            disp('Periodicity not found or wrong (only monthly, weekly ad daily available')
-            prm.rollingperiod = min(round(size(HFunds.(fundNames{i}).TrackROR,1)/2,0),30*21);
-    end
-    
-    RegressFLS30 = FLSregression(prm); % constructor
-    RegressFLS30.GetFLS(90,0);          % regression
-    betas = RegressFLS30.Betas;
-    RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
-    
-    
-    SimpleRegress = Regression(prm);
-    SimpleRegress.SimpleRegression;
-    
-    OriginalPrices = HFunds.(fundNames{i}).TrackNAV(:,2);
-    DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
-    Betas = RegressFLS30.Betas(:,2:end);
-    DateBetas = RegressFLS30.Betas(:,1);
-    % regressors = Regressors.PCA.out.selected./100; %%% very important: regressors are expressed in %!!!
-    % DateRegressors = Regressors.PCA.out.dates;
-    regressors = Universe_1.AllInvariants.X./100; % without pca
-    DateRegressors = Universe_1.AllInvariants.Dates; % without pca
-    
-    HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
-    HFunds.(fundNames{i}).Betas = RegressFLS30.Betas;
-    HFunds.(fundNames{i}).RegResult = RegressFLS30;
-    HFunds.(fundNames{i}).TrackEst =  RegressFLS30.Output;
-    
-    BetasSR = repmat(table2array(SimpleRegress.Betas(:,3:end)),size(Betas,1),1);
-    
-    HFundsSR.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,BetasSR,DateBetas,regressors,DateRegressors);
-    HFundsSR.(fundNames{i}).Betas = BetasSR;
-    HFundsSR.(fundNames{i}).RegResult = SimpleRegress;
-    
+    params.Ydates = HFunds.(fundNames{i}).TrackNAV(:,1);
+    params.Y = HFunds.(fundNames{i}).TrackNAV(:,2);
+    params.Yname = fundNames{i};
+    params.Xdates = Regressors.Dates;
+    params.X = Regressors.X.*100; 
+    params.Xnames = Regressors.NamesSet';
+    params.WithPCA = false(1);
+
+    HFunds.(fundNames{i}).BackTest = FillWeeklyWithDaily(params);
+%     % RawReturns = Regressors.PCA.out.CellSelected;
+%     RawReturns = Regressors.CellSelected; %% without PCA
+%     
+%     utilParams = [];
+%     utilParams.inputTS = RawReturns';
+%     utilParams.referenceDatesVector = HFunds.(fundNames{i}).TrackROR(:,1); 
+%     utilParams.op_type = 'fillUsingNearest';
+%     U = Utilities(utilParams);
+%     U.GetCommonDataSet;
+%     
+%     Y = HFunds.(fundNames{i}).TrackROR(:,2) ;
+%     X = U.Output.DataSet.data;
+%     Dates = U.Output.DataSet.dates;
+%     rgrs = [Dates,X];
+%     
+%     prm.inputdates = Dates; % inputdates;
+%     prm.inputarray = [Y,X]./100;  % inparrayror;
+%     %prm.inputnames = [fundNames{i},Regressors.PCA.out.selectedNames];
+%     prm.inputnames = [fundNames{i},Universe_1.AllInvariants.NamesSet'];  %without pca
+%     
+%     switch HFunds.(fundNames{i}).Periodicity
+%         case 'monthly'
+%             prm.rollingperiod = 30;
+%         case 'weekly'
+%             prm.rollingperiod = 30*4;
+%         case 'daily' 
+%             prm.rollingperiod = 30*21;
+%         otherwise
+%             disp('Periodicity not found or wrong (only monthly, weekly ad daily available')
+%             prm.rollingperiod = min(round(size(HFunds.(fundNames{i}).TrackROR,1)/2,0),30*21);
+%     end
+%     
+%     RegressFLS30 = FLSregression(prm); % constructor
+%     RegressFLS30.GetFLS(90,0);          % regression
+%     betas = RegressFLS30.Betas;
+%     RegressFLS30.GetFLSforecast(betas,rgrs,'Simple');
+%     
+%     
+%     SimpleRegress = Regression(prm);
+%     SimpleRegress.SimpleRegression;
+%     
+%     OriginalPrices = HFunds.(fundNames{i}).TrackNAV(:,2);
+%     DatePrices = HFunds.(fundNames{i}).TrackNAV(:,1);
+%     Betas = RegressFLS30.Betas(:,2:end);
+%     DateBetas = RegressFLS30.Betas(:,1);
+%     % regressors = Regressors.PCA.out.selected./100; %%% very important: regressors are expressed in %!!!
+%     % DateRegressors = Regressors.PCA.out.dates;
+%     regressors = Universe_1.AllInvariants.X./100; % without pca
+%     DateRegressors = Universe_1.AllInvariants.Dates; % without pca
+%     
+%     HFunds.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,Betas,DateBetas,regressors,DateRegressors);
+%     HFunds.(fundNames{i}).Betas = RegressFLS30.Betas;
+%     HFunds.(fundNames{i}).RegResult = RegressFLS30;
+%     HFunds.(fundNames{i}).TrackEst =  RegressFLS30.Output;
+%     
+%     BetasSR = repmat(table2array(SimpleRegress.Betas(:,3:end)),size(Betas,1),1);
+%     
+%     HFundsSR.(fundNames{i}).BackTest = GetFilledPrices(OriginalPrices,DatePrices,BetasSR,DateBetas,regressors,DateRegressors);
+%     HFundsSR.(fundNames{i}).Betas = BetasSR;
+%     HFundsSR.(fundNames{i}).RegResult = SimpleRegress;
+%    
 %     RegressFLSR = FLSregression(prm) % constructor
 %     RegressFLSR.GetFLSrolling(30);          % regression
 %     betasR = RegressFLSR.Betas;
