@@ -718,7 +718,7 @@ for i = 1:nrOfFunds
     params.Xdates = Regressors.Dates;
     params.X = Regressors.X.*100; 
     params.Xnames = Regressors.NamesSet';
-    params.WithPCA = false(1);
+    params.WithPCA = true(1);
     
     U = Utilities(params);
     U.FillWeeklyWithDaily;
