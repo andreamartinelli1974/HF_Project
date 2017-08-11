@@ -603,7 +603,7 @@ end
 if exist('rf','var') && ~isempty(rf)
     erfParams.returnsLag = 1;
     erfParams.ExtendedLag = 5;
-    Ext_RF = External_Risk_Factors(rf,obj_names,erfParams);
+    Ext_RF = External_Risk_Factors(rf,obj_names);
 end
 
 %% ASSETS OF THE INVESTMENT UNIVERSE DEFINITION
@@ -719,8 +719,11 @@ for i = 1:nrOfFunds
     params.X = Regressors.X.*100; 
     params.Xnames = Regressors.NamesSet';
     params.WithPCA = false(1);
+    
+    U = Utilities(params);
+    U.FillWeeklyWithDaily;
 
-    HFunds.(fundNames{i}).BackTest = FillWeeklyWithDaily(params);
+    HFunds.(fundNames{i}).BackTest = U.Output;
 %     % RawReturns = Regressors.PCA.out.CellSelected;
 %     RawReturns = Regressors.CellSelected; %% without PCA
 %     
