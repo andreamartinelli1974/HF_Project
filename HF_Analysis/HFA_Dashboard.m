@@ -603,7 +603,7 @@ end
 if exist('rf','var') && ~isempty(rf)
     erfParams.returnsLag = 1;
     erfParams.ExtendedLag = 5;
-    Ext_RF = External_Risk_Factors(rf,obj_names);
+    Ext_RF = External_Risk_Factors(rf,obj_names,erfParams);
 end
 
 %% ASSETS OF THE INVESTMENT UNIVERSE DEFINITION
@@ -637,7 +637,7 @@ IU = ReadFromIU_inputFile(iu_params);
 % INSTANCIATING AN OBJ OF CLASS UNIVERSE AND ADDING ASSETS TO IT
 %  ************************************************************************
 clear Universe_1;
-Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF);
+Universe_1 = universe('FirstUniverse',DataFromBBG,Ext_RF,IU,[]);
 % adding vectors of assets to the universe
 if isvector(IU.E)
     Universe_1.AddAsset(IU.E);
