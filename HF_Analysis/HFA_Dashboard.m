@@ -724,6 +724,14 @@ for i = 1:nrOfFunds
     U.FillWeeklyWithDaily;
 
     HFunds.(fundNames{i}).BackTest = U.Output;
+    
+    params.WithPCA = false(1);
+    
+    U = Utilities(params);
+    U.FillWeeklyWithDaily;
+    
+    HFundsSR.(fundNames{i}).BackTest = U.Output;
+    
 %     % RawReturns = Regressors.PCA.out.CellSelected;
 %     RawReturns = Regressors.CellSelected; %% without PCA
 %     
