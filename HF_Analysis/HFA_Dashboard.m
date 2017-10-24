@@ -654,9 +654,6 @@ end
 if isvector(IU.O)
     Universe_1.AddAsset(IU.O);
 end
-if isvector(IU.Oa)
-    Universe_1.AddAsset(IU.Oa);
-end
 if isvector(IU.CDS)
     Universe_1.AddAsset(IU.CDS);
 end
@@ -669,7 +666,7 @@ end
 % Universe_1.InvariantsLastDate): this is useful to understand which dates
 % vector 'drives' the intersection on a common set of dates performed by
 % the method Universe_1.GetInvariants_EmpiricalDistribution
-Universe_1.GetLastDate;
+Universe_1.GetLastDateAndSectorCountry;
 % invoking method to get all invariants
 Universe_1.GetInvariants_EmpiricalDistribution;
 
