@@ -64,6 +64,8 @@ DataFromMDS.NOMDS = false(1); % if true (on machines with no MDS access), data a
 
 hor = DAA_params.Horizon; % Investment horizon (in days)
 
+useSavedVolaObj.flag = 1; % 0 to save vola surface obj; 1 to use previously saved vola objects
+useSavedVolaObj.folder = [cd,'\VolaSurfacesObjects\']; % folder to save/load vola obj
 
 
 %% GET THE VARIOUS REGRESSORS DATA
@@ -105,386 +107,42 @@ AllCurvesToBeGenerated = {};
 AllCurvesToBeGenerated = ReadFromIU_inputFile.AppendAndClean(AllCurvesToBeGenerated,cdsCurvesList,irCurvesList1,irCurvesList2,irCurvesList3, ...
     irc2beBtStrapped_List,irc2beBtStrapped_Disc,accrualsList,fxCurves,irCurve4Options,VolaEquity4Options);
 
-%% ************************** CDS CURVES OBJECTS **************************
-% READING THE Investment Universe File, CDS_Curves Sheet to build CDS curves objects
 
-clear CdsCurves;
-historical_window.startDate = history_start_date;
-historical_window.endDate = history_end_date;
+%% NEW CLASS ReadAsset.m TO BE TESTED
 
-% OPENING XLS CONNECTION TO READ ALL CURVES DATA FOR CDS CURVES THAT WILL
-% NOT BE READ FROM BLOOMBERG
-exl = actxserver('excel.application');
-exlWkbk = exl.Workbooks;
-% exlFile = exlWkbk.Open([cd,'\CDS_MarketData.xlsm']); % PARAMETRIZE this file name
-exlFile = exlWkbk.Open(['C:\Users\' userId '\Documents\GitHub\AA_Project\AssetAllocation','\CDS_MarketData.xlsm']); % PARAMETRIZE this file name
+AL.cdsCurvesList          = cdsCurvesList;
+AL.irCurvesList1          = irCurvesList1;
+AL.irCurvesList2          = irCurvesList2;
+AL.irCurvesList3          = irCurvesList3;
+AL.irc2beBtStrapped_List  = irc2beBtStrapped_List;
+AL.irc2beBtStrapped_Disc  = irc2beBtStrapped_Disc;
+AL.accrualsList           = accrualsList;
+AL.fxCurves               = fxCurves;
+AL.irCurve4Options        = irCurve4Options;
+AL.VolaEquity4Options     = VolaEquity4Options;
+AL.AllCurvesToBeGenerated = AllCurvesToBeGenerated;
 
-% ********* CDS CURVES *********
-CdsCurvesTable = readtable(InvestmentUniverse_fileName,'Sheet',curves2beRead.CDS_SheetName);
-L = size(CdsCurvesTable,1);
+RAparams.AL = AL;
+RAparams.filename = InvestmentUniverse_fileName;
+RAparams.path = [cd,'\HistBstrappedCurves\'];
+RAparams.configFile4IRCB = configFile4IrCurvesBtStrap;
+RAparams.history_start_date = history_start_date;
+RAparams.history_end_date = history_end_date;
+RAparams.DataFromBBG = DataFromBBG;
+RAparams.DataFromMDS = DataFromMDS;
+RAparams.useVolaSaved = useSavedVolaObj;
 
-eof = false(1);
-rowNum = 0;
+ReadAssets = ReadAsset(RAparams);
 
-while ~eof
-    params_curve = [];
-    rowNum = rowNum + 1;
-    if rowNum>L
-        break;
-    end
+try
+IR_Curves    = ReadAssets.Assets.IR_Curves;
+CdsCurves    = ReadAssets.Assets.CdsCurves;
+sIndices     = ReadAssets.Assets.sIndices;
+SWAP_curves  = ReadAssets.Assets.SWAP_curves;
+VolaSurfaces = ReadAssets.Assets.VolaSurfaces;
+catch mm
     
-    curveName = cell2mat(table2cell(CdsCurvesTable(rowNum,'name')));
-    
-    % check if the curve is in cdsCurvesList
-    im = ismember(AllCurvesToBeGenerated,curveName);
-    if sum(im)==0
-        continue
-    end
-    
-    if ~isempty(curveName)
-        params_curve.thresholdForInterpolating = cell2mat(table2cell(CdsCurvesTable(rowNum,'thresholdForInterpolating')));
-        params_curve.extrapolate = (cell2mat(table2cell(CdsCurvesTable(rowNum,'extrapolate'))));
-        params_curve.int_ext = cell2mat(table2cell(CdsCurvesTable(rowNum,'Internal_External_RF')));
-        params_curve.RatesInputFormat = cell2mat(table2cell(CdsCurvesTable(rowNum,'rates_input_format')));
-        params_curve.ToBeIncludedInInvariants = cell2mat(table2cell(CdsCurvesTable(rowNum,'ToBeIncludedInInvariants')));
-        params_curve.tenorMapType = cell2mat(table2cell(CdsCurvesTable(rowNum,'tenors_key_mapping')));
-        
-        curveMaturities = table2cell(CdsCurvesTable(rowNum,'maturities'));
-        curveMaturitiesIntoCell=regexp(curveMaturities,',','split');
-        ticker = cell2mat(table2cell(CdsCurvesTable(rowNum,'ticker')));
-        
-        nmat = numel(curveMaturitiesIntoCell{1});
-        % build the 'curve_tickers' fields: tickers of all points oin the curve
-        % (the logic is the same as the one applied by Bloomberg)
-        clear curve_tickers;
-        for k=1:nmat
-            curve_tickers{k,1} = [ticker,' ',cell2mat(curveMaturitiesIntoCell{1}(k)),' Corp'];
-        end
-        
-        params_curve.excel_spread_input.flag = logical(cell2mat(table2cell(CdsCurvesTable(rowNum,'excel'))));
-        
-        if params_curve.excel_spread_input.flag % if data are in xls file
-            ShName = cell2mat(table2cell(CdsCurvesTable(rowNum,'sheetname')));
-            params_curve.excel_spread_input.manual_ticker = ShName;
-            params_curve.excel_spread_input.firstCDScol = cell2mat(table2cell(CdsCurvesTable(rowNum,'firstColInXlsFile'))); % column where spreads vectors start in the input file
-            params_curve.excel_spread_input.lastCDScol =  cell2mat(table2cell(CdsCurvesTable(rowNum,'lastColInXlsFile'))); % column where spreads vectors start in the input file
-            sheetMain = exlFile.Sheets.Item(ShName); % name of the sheet in the xls file
-            dat_range = GetXlsRange(sheetMain,cell2mat(table2cell(CdsCurvesTable(rowNum,'dat_range'))));
-            params_curve.excel_spread_input.inputMatrix = sheetMain.Range(dat_range).value;
-            price_used = [];
-            
-        else % data from Bloomberg
-            price_used = cell2mat(table2cell(CdsCurvesTable(rowNum,'price_used')));
-        end
-        
-        CdsCurves.(curveName) = CDS_Curve(ticker,DataFromBBG,curve_tickers,historical_window,price_used,params_curve)
-    else
-        eof = true(1); % assuming EOF when there is nothing in the field 'name'
-    end
-    
-end % ~eof
-
-Quit(exl);
-delete(exl);
-clear exlFile;
-
-[taskstate, taskmsg] = system('tasklist|findstr "EXCEL.EXE"');
-if ~isempty(taskmsg)
-    status = system('taskkill /F /IM EXCEL.EXE');
 end
-% ***** END of CDS CURVES *****
-
-%% ************************ IR CURVES OBJECTS  ****************************
-% READING THE Investment Universe File, IR_Curves Sheet to build IR curves objects
-% IRC_params.CurveID = ['YCGT0040 Index'];
-% IRC_params.ctype = ['BBG_single'];
-
-clear IRcurves;
-IR_CurvesTable = readtable(InvestmentUniverse_fileName,'Sheet',curves2beRead.IR_SheetName);
-
-L = size(IR_CurvesTable,1);
-
-eof = false(1);
-rowNum = 0;
-
-while ~eof
-    IRC_params = [];
-    extCdataparams = [];
-    rowNum = rowNum + 1;
-    if rowNum>L
-        break;
-    end
-    IRC_params.StartDate = history_start_date;
-    IRC_params.EndDate = history_end_date;
-    IRC_params.DataFromBBG = DataFromBBG;
-    
-    curveName = cell2mat(table2cell(IR_CurvesTable(rowNum,'name')));
-    
-    % check if the curve is in irCurvesList
-    im = ismember(AllCurvesToBeGenerated,curveName);
-    if sum(im)==0
-        continue
-    end
-    
-    if ~isempty(curveName)
-        IRC_params.CurveID = cell2mat(table2cell(IR_CurvesTable(rowNum,'curve_id')));
-        IRC_params.ctype = cell2mat(table2cell(IR_CurvesTable(rowNum,'ctype')));
-        IRC_params.TenorsKeyMapping_choice = cell2mat(table2cell(IR_CurvesTable(rowNum,'tenors_key_mapping')));
-        IRC_params.BBG_YellowKey = cell2mat(table2cell(IR_CurvesTable(rowNum,'bbg_yellowKey')));
-        IRC_params.invertBbgSigns = logical(cell2mat(table2cell(IR_CurvesTable(rowNum,'invertBbgSigns'))));
-        IRC_params.RatesInputFormat = (cell2mat(table2cell(IR_CurvesTable(rowNum,'rates_input_format'))));
-        IRC_params.RatesType = (cell2mat(table2cell(IR_CurvesTable(rowNum,'rates_type'))));
-        IRC_params.int_ext = cell2mat(table2cell(IR_CurvesTable(rowNum,'Internal_External_RF')));
-        IRC_params.ToBeIncludedInInvariants = cell2mat(table2cell(IR_CurvesTable(rowNum,'ToBeIncludedInInvariants')));
-        IRC_params.BBG_tickerRoot = cell2mat(table2cell(IR_CurvesTable(rowNum,'BBG_tickerRoot')));
-        
-        extCdataparams.XlsCurve.FileName = cell2mat(table2cell(IR_CurvesTable(rowNum,'xlsCurve_filename')));
-        extCdataparams.XlsCurve.SheetName = cell2mat(table2cell(IR_CurvesTable(rowNum,'xlsCurve_sheetname')));
-        
-        % TODO: 'internalize into IR_Curve the 2 input alternatives below:
-        % and also add the one related to the output from bootsstrapped
-        % curves (see section below reading bootstrapped curve)
-        if strcmp(IRC_params.ctype,'file') &  ~isempty(extCdataparams.XlsCurve.FileName) % need to read curve's data from xls file
-            % if input is from file and there is an Excel file name ***
-            % *** INPUT FROM XLS FILE ***
-            U = Utilities(extCdataparams);
-            U.ReadCurveDataFromXls;
-            IRC_params.ExtSource = U.Output;
-        elseif strcmp(IRC_params.ctype,'MDS')
-            % *** INPUT from Mkt Data Server ***
-            % as above here I put in IRC_params.ExtSource the data that I
-            % want in the format produced by IR_Curves
-            disp('check');
-            uparams.startDate = history_start_date;
-            uparams.endDate = history_end_date;
-            uparams.curveName = curveName;
-            uparams.dataType = 'BvalData';
-            uparams.DataFromMDS.createLog = false(1);
-            uparams.DataFromMDS = DataFromMDS;
-            uparams.DataFromMDS.fileMap{1,1} = 'MDS_BVAL_Curve.xlsx';
-            U = Utilities(uparams);
-            U.GetMdsData;
-            IRC_params.ExtSource = U.Output;
-        end
-        IRcurves.(curveName) = IR_Curve(IRC_params);
-    else
-        eof = true(1); % assuming EOF when there is nothing in the field 'name'
-    end
-    
-end % ~eof
-
-% ******************** END OF IR CURVES OBJECTS READING *******************
-
-%% ********************** SINGLE INDICES OBJECTS  *************************
-% READING THE Investment Universe File, Single_Indices Sheet to build
-% 'SingleIndex' objects (mainly needed within the instance of class
-% External_Risk_Factors' to model invariants
-
-sc_params.DataFromBBG = DataFromBBG;
-sc_params.start_dt = history_start_date;
-sc_params.end_dt = history_end_date;
-
-clear sIndices;
-SingleIdxTable = readtable(InvestmentUniverse_fileName,'Sheet',curves2beRead.SingleIndices);
-
-L = size(SingleIdxTable,1);
-
-eof = false(1);
-rowNum = 0;
-
-eof = false(1);
-rowNum = 0;
-
-while ~eof
-    sc_params.ticker  = [];
-    sc_params.isRate  = [];
-    sc_params.InputRatesFormat  = [];
-    sc_params.rate_type  = [];
-    
-    rowNum = rowNum + 1;
-    if rowNum>L
-        break;
-    end
-    
-    indexName = cell2mat(table2cell(SingleIdxTable(rowNum,'name')));
-    
-    % check if the curve is in cdsCurvesList
-    im = ismember(AllCurvesToBeGenerated,indexName);
-    if sum(im)==0
-        continue
-    end
-    
-    if ~isempty(indexName)
-        sc_params.ticker = cell2mat(table2cell(SingleIdxTable(rowNum,'ticker')));
-        sc_params.isRate = cell2mat(table2cell(SingleIdxTable(rowNum,'isRate')));
-        sc_params.InputRatesFormat = cell2mat(table2cell(SingleIdxTable(rowNum,'InputRatesFormat')));
-        sc_params.rate_type = cell2mat(table2cell(SingleIdxTable(rowNum,'rate_type')));
-        sc_params.int_ext = cell2mat(table2cell(SingleIdxTable(rowNum,'Internal_External_RF')));
-        sc_params.ToBeIncludedInInvariants = cell2mat(table2cell(SingleIdxTable(rowNum,'ToBeIncludedInInvariants')));
-        
-        sIndices.(indexName) = SingleIndex(sc_params);
-        
-    else
-        eof = true(1); % assuming EOF when there is nothing in the field 'name'
-    end
-    
-end % ~eof
-
-% **************** END OF SINGLE INDICES OBJECTS READING  *****************
-
-
-%% ************************ BOOTSTRAPPED CURVES  **************************
-% builds all curves structures (to be used for bootstrappings)
-% (this set must comprise all the curves used in the Investment Universe)
-curveParam.configFile = configFile4IrCurvesBtStrap;
-curveParam.valDate = [];
-
-bparams.DataFromBBG = DataFromBBG;
-bparams.StartDate = history_start_date;
-bparams.EndDate = history_end_date;
-bparams.historyPath = [cd,'\HistBstrappedCurves\']; % subdir where hist bootstrapped curves are stored
-
-Curves2BeBtStrapped = readtable(InvestmentUniverse_fileName,'Sheet',curves2beRead.IRC2beBtStrapped);
-L = size(Curves2BeBtStrapped,1);
-
-eof = false(1);
-rowNum = 0;
-
-while ~eof
-    
-    rowNum = rowNum + 1;
-    if rowNum>L
-        break;
-    end
-    
-    curveName = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'name')));
-    
-    % check if the curve is in AllCurvesToBeGenerated
-    im = ismember(AllCurvesToBeGenerated,curveName);
-    if sum(im)==0
-        continue
-    end
-    
-    if ~isempty(curveName)
-        
-        % IDENTIFY THE STRUCTURE OF THE CURVE TO BE BOOTSTRAPPED
-        bparams.CurveID{1} = curveName;
-        bparams.BBG_tickerRoot = [];
-        bstrapParam.depoDC = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'depoDC')));
-        bstrapParam.futureDC = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'futureDC')));
-        swapDCtmp = (table2cell(Curves2BeBtStrapped(rowNum,'swapDC')));
-        splitted = regexp(swapDCtmp,',','split');
-        bstrapParam.swapDC(1,:) = str2num(cell2mat(splitted{1}(1)));
-        bstrapParam.swapDC(1,2) = str2num(cell2mat(splitted{1}(2)));
-        
-        bparams.rates_type = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'rates_type')));
-        bparams.rates_input_format = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'rates_input_format')));
-        bparams.int_ext = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'Internal_External_RF')));
-        bparams.ToBeIncludedInInvariants = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'ToBeIncludedInInvariants')));
-        bparams.tenors_key_mapping = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'tenors_key_mapping')));
-        bparams.invertBbgSigns = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'invertBbgSigns')));
-        bparams.bootPillChoice = cell2mat(table2cell(Curves2BeBtStrapped(rowNum,'PillarsStructure')));
-        
-        R = HistoricalRateCurve(bparams, curveParam, bstrapParam);
-        
-        SWAP_curves.(curveName) = R.rateCurve.(curveName);
-        % *******
-        % *******
-        
-    else
-        eof = true(1); % assuming EOF when there is nothing in the field 'name'
-    end
-    
-    
-end % ~eof
-% ********************** END OF BOOTSTRAPPED CURVES NEW  ******************
-
-%% ************************* VOLATILITY  OBJECTS **************************
-clear VolaSurfaces;
-VolaEquityOptTable = readtable(InvestmentUniverse_fileName,'Sheet',curves2beRead.VolaEquity);
-
-L = size(VolaEquityOptTable,1);
-
-eof = false(1);
-rowNum = 0;
-
-eof = false(1);
-rowNum = 0;
-
-while ~eof
-    underlying_ticker  = [];
-    optionRootTicker = [];
-    min_strike_increase = [];
-    dec_digits = [];
-    rfr = [];
-    divYield = [];
-    volaData_source = [];
-    Internal_External_RF = [];
-    ToBeIncludedInInvariants = [];
-    
-    rowNum = rowNum + 1;
-    if rowNum>L
-        break;
-    end
-    
-    volaName = cell2mat(table2cell(VolaEquityOptTable(rowNum,'name')));
-    
-    % check if the curve is in cdsCurvesList
-    im = ismember(AllCurvesToBeGenerated,volaName);
-    if sum(im)==0
-        continue
-    end
-    
-    % temp to exclude items already in VolaSurfaces after an error
-    % however can be left here since it will simple exclude already modeled
-    % objects)
-    % VolaSNames = fieldnames(VolaSurfaces);
-    % im = ismember(VolaSNames,volaName);
-    % if sum(im)>0
-    %    continue
-    %end
-    
-    
-    if ~isempty(volaName)
-        underlying_ticker = cell2mat(table2cell(VolaEquityOptTable(rowNum,'underlying_ticker')));
-        optionRootTicker = cell2mat(table2cell(VolaEquityOptTable(rowNum,'optionRootTicker')));
-        
-        min_strike_increase = cell2mat(table2cell(VolaEquityOptTable(rowNum,'min_strike_increase')));
-        dec_digits = cell2mat(table2cell(VolaEquityOptTable(rowNum,'dec_digits')));
-        rfr = cell2mat(table2cell(VolaEquityOptTable(rowNum,'rfr')));
-        divYield = cell2mat(table2cell(VolaEquityOptTable(rowNum,'yield')));
-        volaData_source = cell2mat(table2cell(VolaEquityOptTable(rowNum,'volaData_source')));
-        Internal_External_RF = cell2mat(table2cell(VolaEquityOptTable(rowNum,'Internal_External_RF')));
-        ToBeIncludedInInvariants = cell2mat(table2cell(VolaEquityOptTable(rowNum,'ToBeIncludedInInvariants')));
-        
-        % for MDS surfaces the range of hist date is the same as the one
-        % used to generate the price history for all of the assets. For BBG
-        % tyoe vola we model the shape of the surface using a few days of
-        % data (as defined in Initial parameters 'IV_hdate' struct array)
-        % otherwise it would take too much time and risk to exceed the
-        % daily limit for BBG data
-        if strcmp(volaData_source,'BBG')
-            ImpliedVolaDatesRange = IV_hdate;
-        elseif strcmp(volaData_source,'MDS')
-            ImpliedVolaDatesRange.start = history_start_date;
-            ImpliedVolaDatesRange.end = history_end_date;
-        end
-        VolaSurfaces.(volaName) = ...
-            ImpliedVola_Surface(DataFromBBG,DataFromMDS,underlying_ticker,optionRootTicker,ImpliedVolaDatesRange,min_strike_increase,dec_digits,rfr,divYield,volaData_source);
-        VolaSurfaces.(volaName).CalibrateSkewParams(1);
-        VolaSurfaces.(volaName).intext = Internal_External_RF;
-        VolaSurfaces.(volaName).ToBeIncludedInInvariants = ToBeIncludedInInvariants;
-        % to plot the surface based on estimated skew/ttm parameters
-        % underlyingATMsVolas = 0.20
-        % VolaSurfaces.V_SX5E.DrawEstimatedSurface(underlyingATMsVolas,3000);
-    else
-        eof = true(1); % assuming EOF when there is nothing in the field 'name'
-    end
-    
-end % ~eof
-
-% % ******************** END OF VOLA SURFACES READING  ********************
-
 
 %% *********************  EXTERNAL RISK FACTORS **************************
 % Here a set of external risk factors is created: these are risk factors
