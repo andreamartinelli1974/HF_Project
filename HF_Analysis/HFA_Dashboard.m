@@ -132,11 +132,17 @@ RAparams.DataFromBBG = DataFromBBG;
 RAparams.DataFromMDS = DataFromMDS;
 RAparams.useVolaSaved = useSavedVolaObj;
 
-ReadAssets = ReadAsset(RAparams);
+ReadAssets   = ReadAsset(RAparams);
+
+IRcurves     = [];
+CdsCurves    = [];
+sIndices     = [];
+SWAP_curves  = [];
+VolaSurfaces = [];
 
 try
-IR_Curves    = ReadAssets.Assets.IR_Curves;
-CdsCurves    = ReadAssets.Assets.CdsCurves;
+IRcurves     = ReadAssets.Assets.IR_Curves;
+CdsCurves    = ReadAssets.Assets.CDS_curves;
 sIndices     = ReadAssets.Assets.sIndices;
 SWAP_curves  = ReadAssets.Assets.SWAP_curves;
 VolaSurfaces = ReadAssets.Assets.VolaSurfaces;
@@ -182,87 +188,113 @@ end
 % discriminate and put in Exf_RF only the risk factors that are really
 % external (this can save a lot of calc time)
 
-clear rf Ext_RF Obj_names;
-Ext_RF = [];
-sizeRF = 0;
-if exist('IRcurves')
-    fnames = fieldnames(IRcurves);
-    nc = numel(fnames);
-    for c=1:nc
-        if strcmp(IRcurves.(fnames{c}).IntExt,'external')
-            % include only the risk factors that are 'external' (that is not
-            % already contained in the body of the objects that will be
-            % instantiated to model assets)
-            sizeRF = sizeRF + 1;
-            rf(sizeRF).value = IRcurves.(fnames{c});
-            obj_names{sizeRF,1} = fnames{c};
-        end
-    end
-else
-    IRcurves = [];
-end
+erfParams.returnsLag = 1; % TODO: put in the initial params file
+erfParams.ExtendedLag = 5;
+erfParams.ExternalInvariantsToRemove = [];
+Ext_RF = External_Risk_Factors(erfParams); % initialize an empty container
 
-if exist('CdsCurves') & ~isempty(CdsCurves)
-    fnames = fieldnames(CdsCurves);
-    nc = numel(fnames);
-    for c=1:nc
-        if strcmp(CdsCurves.(fnames{c}).IntExt,'external')
-            sizeRF = sizeRF + 1;
-            rf(sizeRF).value = CdsCurves.(fnames{c});
-            obj_names{sizeRF,1} = fnames{c};
-        end
-    end
-else
-    CdsCurves = [];
+if ~isempty(IRcurves)
+    objNames = fieldnames(IRcurves);
+    rf = struct2cell(IRcurves);
+    Ext_RF.addRiskFactors(rf,objNames);
 end
-
-if exist('sIndices') & ~isempty(sIndices)
-    fnames = fieldnames(sIndices);
-    nc = numel(fnames);
-    for c=1:nc
-        if strcmp(sIndices.(fnames{c}).IntExt,'external')
-            sizeRF = sizeRF + 1;
-            rf(sizeRF).value = sIndices.(fnames{c});
-            obj_names{sizeRF,1} = fnames{c};
-        end
-    end
-else
-    sIndices = [];
+if ~isempty(CdsCurves)
+    objNames = fieldnames(CdsCurves);
+    rf = struct2cell(CdsCurves);
+    Ext_RF.addRiskFactors(rf,objNames);
 end
-
-if exist('SWAP_curves') & ~isempty(SWAP_curves)
-    fnames = fieldnames(SWAP_curves);
-    nc = numel(fnames);
-    for c=1:nc
-        if strcmp(SWAP_curves.(fnames{c}).IntExt,'external')
-            sizeRF = sizeRF + 1;
-            rf(sizeRF).value = SWAP_curves.(fnames{c});
-            obj_names{sizeRF,1} = fnames{c};
-        end
-    end
-else
-    SWAP_curves = [];
+if ~isempty(sIndices)
+    objNames = fieldnames(sIndices);
+    rf = struct2cell(sIndices);
+    Ext_RF.addRiskFactors(rf,objNames);
 end
-
-if exist('VolaSurfaces') & ~isempty(VolaSurfaces)
-    fnames = fieldnames(VolaSurfaces);
-    nc = numel(fnames);
-    for c=1:nc
-        if strcmp(VolaSurfaces.(fnames{c}).intext,'external')
-            sizeRF = sizeRF + 1;
-            rf(sizeRF).value = VolaSurfaces.(fnames{c});
-            obj_names{sizeRF,1} = fnames{c};
-        end
-    end
-else
-    VolaSurfaces = [];
+if ~isempty(SWAP_curves)
+    objNames = fieldnames(SWAP_curves);
+    rf = struct2cell(SWAP_curves);
+    Ext_RF.addRiskFactors(rf,objNames);
 end
-
-if exist('rf','var') && ~isempty(rf)
-    erfParams.returnsLag = 1;
-    erfParams.ExtendedLag = 5;
-    Ext_RF = External_Risk_Factors(rf,obj_names,erfParams);
-end
+% 
+% clear rf Ext_RF Obj_names;
+% Ext_RF = [];
+% sizeRF = 0;
+% if exist('IRcurves')
+%     fnames = fieldnames(IRcurves);
+%     nc = numel(fnames);
+%     for c=1:nc
+%         if strcmp(IRcurves.(fnames{c}).IntExt,'external')
+%             % include only the risk factors that are 'external' (that is not
+%             % already contained in the body of the objects that will be
+%             % instantiated to model assets)
+%             sizeRF = sizeRF + 1;
+%             rf(sizeRF).value = IRcurves.(fnames{c});
+%             obj_names{sizeRF,1} = fnames{c};
+%         end
+%     end
+% else
+%     IR_curves = [];
+% end
+% 
+% if exist('CdsCurves') & ~isempty(CdsCurves)
+%     fnames = fieldnames(CdsCurves);
+%     nc = numel(fnames);
+%     for c=1:nc
+%         if strcmp(CdsCurves.(fnames{c}).IntExt,'external')
+%             sizeRF = sizeRF + 1;
+%             rf(sizeRF).value = CdsCurves.(fnames{c});
+%             obj_names{sizeRF,1} = fnames{c};
+%         end
+%     end
+% else
+%     CdsCurves = [];
+% end
+% 
+% if exist('sIndices') & ~isempty(sIndices)
+%     fnames = fieldnames(sIndices);
+%     nc = numel(fnames);
+%     for c=1:nc
+%         if strcmp(sIndices.(fnames{c}).IntExt,'external')
+%             sizeRF = sizeRF + 1;
+%             rf(sizeRF).value = sIndices.(fnames{c});
+%             obj_names{sizeRF,1} = fnames{c};
+%         end
+%     end
+% else
+%     sIndices = [];
+% end
+% 
+% if exist('SWAP_curves') & ~isempty(SWAP_curves)
+%     fnames = fieldnames(SWAP_curves);
+%     nc = numel(fnames);
+%     for c=1:nc
+%         if strcmp(SWAP_curves.(fnames{c}).IntExt,'external')
+%             sizeRF = sizeRF + 1;
+%             rf(sizeRF).value = SWAP_curves.(fnames{c});
+%             obj_names{sizeRF,1} = fnames{c};
+%         end
+%     end
+% else
+%     SWAP_curves = [];
+% end
+% 
+% if exist('VolaSurfaces') & ~isempty(VolaSurfaces)
+%     fnames = fieldnames(VolaSurfaces);
+%     nc = numel(fnames);
+%     for c=1:nc
+%         if strcmp(VolaSurfaces.(fnames{c}).intext,'external')
+%             sizeRF = sizeRF + 1;
+%             rf(sizeRF).value = VolaSurfaces.(fnames{c});
+%             obj_names{sizeRF,1} = fnames{c};
+%         end
+%     end
+% else
+%     VolaSurfaces = [];
+% end
+% 
+% if exist('rf','var') && ~isempty(rf)
+%     erfParams.returnsLag = 1;
+%     erfParams.ExtendedLag = 5;
+%     Ext_RF = External_Risk_Factors(rf,obj_names,erfParams);
+% end
 
 %% ASSETS OF THE INVESTMENT UNIVERSE DEFINITION
 % ************************************************************************
